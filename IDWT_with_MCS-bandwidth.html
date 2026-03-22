@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DWT Calculator with Monte Carlo Simulation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.plot.ly/plotly-2.20.0.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        textarea {
+            resize: vertical;
+        }
+        .loader {
+            border-top-color: #3498db;
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-8 max-w-5xl">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Advanced DWT Calculator</h1>
+            <p class="text-md text-gray-600 mt-2">With Monte Carlo Simulation for Threshold Stability Analysis</p>
+        </header>
+
+        <div class="bg-white p-6 rounded-2xl shadow-lg border border-gray-200">
+            
+            <div class="mb-6">
+                <h2 class="text-xl font-semibold mb-3 text-gray-700">1. Input Data</h2>
+                <div class="grid md:grid-cols-2 gap-6 text-sm">
+                    <div>
+                        <label for="clean-data-input" class="font-medium mb-2 text-green-800 block">Clean Model AUCs (Non-Watermarked)</label>
+                        <textarea id="clean-data-input" rows="5" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500" placeholder="Enter at least 10 comma-separated values..."></textarea>
+                    </div>
+                    <div>
+                        <label for="watermarked-data-input" class="font-medium mb-2 text-blue-800 block">Watermarked Model AUCs</label>
+                        <textarea id="watermarked-data-input" rows="5" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="Enter at least 10 comma-separated values..."></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-6">
+                <h2 class="text-xl font-semibold mb-3 text-gray-700">2. Bandwidth Settings</h2>
+                <div class="p-4 border border-gray-200 rounded-lg bg-gray-50 text-sm">
+                    <label for="bandwidth-selector" class="font-medium mb-2 text-gray-800 block">Bandwidth Selection</label>
+                    <select id="bandwidth-selector" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                        <option value="dynamic" selected>Silverman's Rule (Dynamic)</option>
+                        <option value="0.5">0.5 * h₀ (Under-smoothed)</option>
+                        <option value="0.75">0.75 * h₀</option>
+                        <option value="1.0">1.0 * h₀ (Fixed Silverman)</option>
+                        <option value="1.25">1.25 * h₀</option>
+                        <option value="1.5">1.5 * h₀ (Over-smoothed)</option>
+                        <option value="2.0">2.0 * h₀</option>
+                    </select>
+                    <p id="h0-display" class="text-xs text-gray-500 mt-2 hidden"></p>
+                </div>
+            </div>
+
+            <div class="mb-6 p-4 border border-gray-200 rounded-lg bg-gray-50">
+                <h2 class="text-xl font-semibold mb-3 text-gray-700">3. Monte Carlo Simulation (Optional)</h2>
+                <div class="flex items-center mb-4">
+                    <input id="run-simulation-checkbox" type="checkbox" class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500">
+                    <label for="run-simulation-checkbox" class="ml-2 block text-sm font-medium text-gray-900">Enable Simulation for Stability Analysis</label>
+                </div>
+                <div id="simulation-inputs" class="hidden grid md:grid-cols-2 gap-6 text-sm">
+                    <div>
+                        <label for="sample-size-s" class="font-medium mb-2 text-gray-800 block">Sample Size per Run (s)</label>
+                        <input type="number" id="sample-size-s" value="8" min="3" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                        <p class="text-xs text-gray-500 mt-1">Number of samples from each dataset per run (m>=3).</p>
+                    </div>
+                    <div>
+                        <label for="simulations-m" class="font-medium mb-2 text-gray-800 block">Number of Simulations (M)</label>
+                        <input type="number" id="simulations-m" value="1000" min="10" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                        <p class="text-xs text-gray-500 mt-1">Number of times to repeat the calculation.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="text-center my-6">
+                <button id="calculate-btn" class="bg-indigo-600 text-white font-semibold py-3 px-8 rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-transform transform hover:scale-105 disabled:bg-gray-400 disabled:cursor-not-allowed">
+                    <span id="btn-text">Calculate</span>
+                    <div id="btn-loader" class="hidden w-6 h-6 border-4 border-t-transparent rounded-full loader mx-auto"></div>
+                </button>
+                <div id="progress-bar-container" class="w-full bg-gray-200 rounded-full h-2.5 mt-4 hidden">
+                  <div id="progress-bar" class="bg-indigo-600 h-2.5 rounded-full" style="width: 0%"></div>
+                </div>
+            </div>
+            <div id="error-message" class="mt-4 text-red-600 font-medium text-sm hidden text-center"></div>
+
+            <div id="results-section" class="hidden">
+                <hr class="my-8 border-gray-200">
+                <h2 class="text-2xl font-semibold mb-4 text-center text-gray-800">4. Results</h2>
+                
+                <div id="single-run-results">
+                    <div id="threshold-output" class="text-center bg-indigo-50 border-l-4 border-indigo-500 text-indigo-900 p-4 rounded-r-lg mb-6"></div>
+                    <div id="stats-output" class="grid sm:grid-cols-2 gap-4 text-center mb-6"></div>
+                    <div id="plot-container" class="w-full h-96 bg-gray-50 rounded-lg border"></div>
+                </div>
+
+                <div id="simulation-results" class="hidden">
+                    <div id="simulation-summary" class="text-center bg-green-50 border-l-4 border-green-500 text-green-900 p-4 rounded-r-lg mb-6"></div>
+                    <h3 class="text-lg font-semibold text-center mt-8 mb-2">Threshold Distribution</h3>
+                    <div id="histogram-container" class="w-full h-96 bg-gray-50 rounded-lg border"></div>
+                </div>
+            </div>
+        </div>
+        
+        <footer class="text-center mt-8 text-sm text-gray-500">
+            <p>&copy; 2024 DWT Analysis Tool. All rights reserved.</p>
+        </footer>
+    </div>
+
+    <script>
+        // --- DOM Elements ---
+        const calculateBtn = document.getElementById('calculate-btn');
+        const btnText = document.getElementById('btn-text');
+        const btnLoader = document.getElementById('btn-loader');
+        const errorDisplay = document.getElementById('error-message');
+        const resultsSection = document.getElementById('results-section');
+        const simulationCheckbox = document.getElementById('run-simulation-checkbox');
+        const simulationInputs = document.getElementById('simulation-inputs');
+        const progressBarContainer = document.getElementById('progress-bar-container');
+        const progressBar = document.getElementById('progress-bar');
+        const h0Display = document.getElementById('h0-display');
+        
+        simulationCheckbox.addEventListener('change', () => {
+            simulationInputs.classList.toggle('hidden', !simulationCheckbox.checked);
+        });
+
+        // --- Core DWT Logic ---
+
+        function getStats(data) {
+            const n = data.length;
+            if (n === 0) return { mean: 0, std: 0, min: 0, max: 0 };
+            const mean = data.reduce((a, b) => a + b) / n;
+            const variance = data.map(x => Math.pow(x - mean, 2)).reduce((a, b) => a + b) / (n > 1 ? n - 1 : 1);
+            return { mean, std: Math.sqrt(variance), min: Math.min(...data), max: Math.max(...data) };
+        }
+
+        function getSilvermanBandwidth(std, n) {
+            if (std === 0 || n < 2) return 0.1;
+            return 1.06 * std * Math.pow(n, -0.2);
+        }
+        
+        const gaussianKernel = (u) => (1 / Math.sqrt(2 * Math.PI)) * Math.exp(-0.5 * u * u);
+
+        function calculateKDE(data, bandwidth) {
+            const stats = getStats(data);
+            const n = data.length;
+            const h = bandwidth;
+            if (n === 0 || h <= 0) return { x: [], y: [] };
+            
+            const gridMin = stats.min - 3 * h;
+            const gridMax = stats.max + 3 * h;
+            const nGrid = 512;
+            const xGrid = Array.from({length: nGrid}, (_, i) => gridMin + i * (gridMax - gridMin) / (nGrid - 1));
+
+            const yGrid = xGrid.map(gridPoint => {
+                let sum = 0;
+                for (let i = 0; i < n; i++) {
+                    sum += gaussianKernel((gridPoint - data[i]) / h);
+                }
+                return sum / (n * h);
+            });
+            return { x: xGrid, y: yGrid };
+        }
+
+        function createWeightedSampler(kdeOutput) {
+            const { x, y } = kdeOutput;
+            if (x.length === 0) return () => 0;
+            const totalProb = y.reduce((sum, p) => sum + p, 0);
+            if (totalProb === 0) {
+                return () => x[Math.floor(Math.random() * x.length)];
+            }
+            
+            const cdf = y.map(p => p / totalProb).reduce((acc, p) => {
+                acc.push((acc.length > 0 ? acc[acc.length - 1] : 0) + p);
+                return acc;
+            }, []);
+
+            return () => {
+                const r = Math.random();
+                let low = 0, high = cdf.length - 1;
+                while(low <= high) {
+                    const mid = Math.floor((low + high) / 2);
+                    if (r <= cdf[mid] && (mid === 0 || r > cdf[mid - 1])) {
+                        return x[mid];
+                    } else if (r > cdf[mid]) {
+                        low = mid + 1;
+                    } else {
+                        high = mid - 1;
+                    }
+                }
+                return x[cdf.length - 1];
+            };
+        }
+
+        /**
+         * New thresholding logic to find a pareto-optimal threshold.
+         * @param {number[]} cleanSamples - Samples from the clean distribution.
+         * @param {number[]} watermarkedSamples - Samples from the watermarked distribution.
+         * @returns {number} The optimal threshold t.
+         */
+        function findOptimalThreshold(cleanSamples, watermarkedSamples) {
+            const maxClean = Math.max(...cleanSamples);
+            const minWatermarked = Math.min(...watermarkedSamples);
+
+            // Case 1: Perfect separation is possible.
+            if (maxClean < minWatermarked) {
+                return (maxClean + 0.01); // Return a threshold just above the maximum clean sample
+            }
+
+            // Case 2: Distributions overlap. Find the point on the ROC curve
+            // closest to the top-left corner (FPR=0, TPR=1).
+            const thresholds = [...new Set([...cleanSamples, ...watermarkedSamples])].sort((a, b) => a - b);
+            
+            let bestThreshold = -1;
+            let minDistance = Infinity;
+
+            for (const t of thresholds) {
+                const TP = watermarkedSamples.filter(s => s > t).length;
+                const FP = cleanSamples.filter(s => s > t).length;
+
+                const TPR = TP / watermarkedSamples.length;
+                const FPR = FP / cleanSamples.length;
+
+                // Euclidean distance to the (0, 1) point in ROC space.
+                const distance = Math.sqrt(Math.pow(FPR, 2) + Math.pow(1 - TPR, 2));
+
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    bestThreshold = t;
+                }
+            }
+            return bestThreshold;
+        }
+        
+        function sample(array, n) {
+            const shuffled = array.slice().sort(() => 0.5 - Math.random());
+            return shuffled.slice(0, n);
+        }
+
+        calculateBtn.addEventListener('click', async () => {
+            // 0. Reset UI
+            calculateBtn.disabled = true;
+            btnText.classList.add('hidden');
+            btnLoader.classList.remove('hidden');
+            errorDisplay.classList.add('hidden');
+            resultsSection.classList.add('hidden');
+            document.getElementById('single-run-results').classList.add('hidden');
+            document.getElementById('simulation-results').classList.add('hidden');
+            progressBarContainer.classList.add('hidden');
+            progressBar.style.width = '0%';
+            h0Display.classList.add('hidden');
+
+            try {
+                // 1. Parse and Validate Input
+                const cleanText = document.getElementById('clean-data-input').value;
+                const watermarkedText = document.getElementById('watermarked-data-input').value;
+
+                if (!cleanText || !watermarkedText) throw new Error("Both input fields must contain data.");
+
+                const fullCleanData = cleanText.split(',').map(Number).filter(n => !isNaN(n));
+                const fullWatermarkedData = watermarkedText.split(',').map(Number).filter(n => !isNaN(n));
+
+                if (fullCleanData.length < 3 || fullWatermarkedData.length < 3) throw new Error("Please provide at least 3 data points for each set.");
+                
+                // 2. Determine Bandwidth Settings
+                const h0_clean = getSilvermanBandwidth(getStats(fullCleanData).std, fullCleanData.length);
+                const h0_watermarked = getSilvermanBandwidth(getStats(fullWatermarkedData).std, fullWatermarkedData.length);
+                
+                h0Display.textContent = `Baseline h₀ (Clean / Watermarked): ${h0_clean.toFixed(4)} / ${h0_watermarked.toFixed(4)}`;
+                h0Display.classList.remove('hidden');
+
+                const bandwidthOption = document.getElementById('bandwidth-selector').value;
+                const isDynamic = bandwidthOption === 'dynamic';
+                const multiplier = parseFloat(bandwidthOption);
+
+                if (simulationCheckbox.checked) {
+                    // --- MONTE CARLO SIMULATION ---
+                    const s = parseInt(document.getElementById('sample-size-s').value);
+                    const M = parseInt(document.getElementById('simulations-m').value);
+
+                    if (isNaN(s) || isNaN(M) || s < 3 || M < 10) throw new Error("Invalid simulation parameters.");
+                    if (s > fullCleanData.length || s > fullWatermarkedData.length) throw new Error(`Sample size (s=${s}) cannot be larger than the number of data points.`);
+
+                    progressBarContainer.classList.remove('hidden');
+                    const thresholds = [];
+                    for (let i = 0; i < M; i++) {
+                        const cleanSample = sample(fullCleanData, s);
+                        const watermarkedSample = sample(fullWatermarkedData, s);
+
+                        const h_clean_sim = isDynamic ? getSilvermanBandwidth(getStats(cleanSample).std, s) : multiplier * h0_clean;
+                        const h_wm_sim = isDynamic ? getSilvermanBandwidth(getStats(watermarkedSample).std, s) : multiplier * h0_watermarked;
+                        
+                        const kdeCleanSim = calculateKDE(cleanSample, h_clean_sim);
+                        const kdeWmSim = calculateKDE(watermarkedSample, h_wm_sim);
+
+                        const samplerCleanSim = createWeightedSampler(kdeCleanSim);
+                        const samplerWmSim = createWeightedSampler(kdeWmSim);
+                        
+                        // Use a smaller sample size inside the loop for performance
+                        const simCleanSamples = Array.from({ length: 5000 }, samplerCleanSim);
+                        const simWmSamples = Array.from({ length: 5000 }, samplerWmSim);
+
+                        const t = findOptimalThreshold(simCleanSamples, simWmSamples);
+                        thresholds.push(t);
+                        
+                        if (i % 10 === 0) {
+                            progressBar.style.width = `${((i + 1) / M) * 100}%`;
+                            await new Promise(resolve => setTimeout(resolve, 0));
+                        }
+                    }
+                    progressBar.style.width = '100%';
+
+                    const simStats = getStats(thresholds);
+                    document.getElementById('simulation-summary').innerHTML = `<p class="text-lg">Threshold Stability (from ${M} simulations):</p><p class="text-2xl font-bold">${simStats.mean.toFixed(4)} ± ${simStats.std.toFixed(4)}</p>`;
+                    
+                    Plotly.newPlot('histogram-container', [{ x: thresholds, type: 'histogram', marker: { color: 'rgb(14, 165, 233)' }}], { title: 'Distribution of Calculated Thresholds', xaxis: { title: 'Threshold Value' }, yaxis: { title: 'Frequency' }, margin: { l: 50, r: 30, b: 50, t: 50 }}, {responsive: true});
+                    document.getElementById('simulation-results').classList.remove('hidden');
+
+                } else {
+                    // --- SINGLE DWT RUN ---
+                    const final_h_clean = isDynamic ? h0_clean : multiplier * h0_clean;
+                    const final_h_watermarked = isDynamic ? h0_watermarked : multiplier * h0_watermarked;
+                    
+                    const cleanKDE = calculateKDE(fullCleanData, final_h_clean);
+                    const watermarkedKDE = calculateKDE(fullWatermarkedData, final_h_watermarked);
+                    
+                    const cleanSampler = createWeightedSampler(cleanKDE);
+                    const watermarkedSampler = createWeightedSampler(watermarkedKDE);
+                    const cleanSamples = Array.from({ length: 100000 }, cleanSampler);
+                    const watermarkedSamples = Array.from({ length: 100000 }, watermarkedSampler);
+
+                    const threshold = findOptimalThreshold(cleanSamples, watermarkedSamples);
+
+                    const falseNegativesCount = watermarkedSamples.filter(s => s <= threshold).length;
+                    const falsePositivesCount = cleanSamples.filter(s => s > threshold).length;
+                    const alpha = falsePositivesCount / cleanSamples.length;
+                    const beta = falseNegativesCount / watermarkedSamples.length;
+
+                    document.getElementById('threshold-output').innerHTML = `<p class="text-lg">Calculated Threshold (t): <strong class="text-2xl font-bold">${threshold.toFixed(4)}</strong></p>`;
+                    document.getElementById('stats-output').innerHTML = `<div class="bg-red-50 p-4 rounded-lg border border-red-200"><h4 class="font-semibold text-red-800">Alpha (FPR)</h4><p class="text-2xl font-bold text-red-700">${(alpha * 100).toFixed(3)}%</p></div><div class="bg-yellow-50 p-4 rounded-lg border border-yellow-300"><h4 class="font-semibold text-yellow-800">Beta (FNR)</h4><p class="text-2xl font-bold text-yellow-700">${(beta * 100).toFixed(3)}%</p></div>`;
+                    
+                    const plotData = [
+                        { ...cleanKDE, mode: 'lines', name: 'Clean Dist.', line: {color: 'rgb(22, 163, 74)', width: 3} },
+                        { ...watermarkedKDE, mode: 'lines', name: 'Watermarked Dist.', line: {color: 'rgb(37, 99, 235)', width: 3} }
+                    ];
+                    const yMax = Math.max(0.01, ...plotData[0].y, ...plotData[1].y);
+                    Plotly.newPlot('plot-container', {
+                        data: plotData,
+                        layout: {
+                            title: 'Estimated AUC Distributions and DWT Threshold',
+                            xaxis: { title: 'AUC Score' }, yaxis: { title: 'Probability Density' },
+                            shapes: [{ type: 'line', x0: threshold, y0: 0, x1: threshold, y1: yMax, line: { color: 'rgb(220, 38, 38)', width: 2, dash: 'dash' }}],
+                            annotations: [{ x: threshold, y: yMax * 0.9, text: `Threshold: ${threshold.toFixed(2)}`, showarrow: true, arrowhead: 2, ax: 60, ay: -30, font: { color: 'rgb(220, 38, 38)' }}],
+                            legend: { y: 0.5, traceorder: 'reversed', font: {size: 12} },
+                            margin: { l: 50, r: 30, b: 50, t: 50 }
+                        },
+                        config: {responsive: true}
+                    });
+                    document.getElementById('single-run-results').classList.remove('hidden');
+                }
+                resultsSection.classList.remove('hidden');
+            } catch (e) {
+                errorDisplay.textContent = e.message;
+                errorDisplay.classList.remove('hidden');
+            } finally {
+                calculateBtn.disabled = false;
+                btnText.classList.remove('hidden');
+                btnLoader.classList.add('hidden');
+                progressBarContainer.classList.add('hidden');
+            }
+        });
+    </script>
+</body>
+</html>
